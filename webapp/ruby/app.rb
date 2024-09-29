@@ -1,3 +1,5 @@
+#(^^)ﾉｼ
+
 # after private
 # hello from win10
 require 'sinatra/base'
