@@ -1,3 +1,4 @@
+# hello from win10
 require 'sinatra/base'
 # mysqlにクエリできるようにする
 # require 'mysql2'
