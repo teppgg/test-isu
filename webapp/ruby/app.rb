@@ -1,4 +1,5 @@
 #(^^)ﾉｼ
+#kanra
 
 # after private
 # hello from win10
