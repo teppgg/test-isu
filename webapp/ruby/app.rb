@@ -148,19 +148,17 @@ module Isuconp
                     ORDER BY `created_at` DESC'
             unless all_comments
               query += ' LIMIT 3'
-          end
+            end
 
-          comments = db.xquery(query, 
-            post[:id]
-          ).to_a
-          comments.each do |comment|
-            comment[:user] = {account_name: comment[:account_name]}
+            comments = db.xquery(query, post[:id]).to_a
+            comments.each do |comment|
+              comment[:user] = {account_name: comment[:account_name]}
           end
           post[:comments] = comments.reverse
 
           # memcachedにset
           memcached.set("comments.#{post[:id]}.#{all_comments.to_s}", post[:comments], 10)
-
+        end
           post[:user] = {
             account_name: post[:account_name],
           }
