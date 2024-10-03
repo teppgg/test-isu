@@ -40,6 +40,13 @@ module Isuconp
         }
       end
 
+      def memcached
+        return Thread.current[:memcached] if Thread.current[:memcached]
+        client = Dalli::Client.new(ENV['ISUCONP_MEMCACHED_ADDRESS'] || 'localhost:11211', {})
+        Thread.current[:memcached] = client
+        client
+      end
+
       # mysqlのtableはisuconpを選択する
       def db
         return Thread.current[:isuconp_db] if Thread.current[:isuconp_db]
