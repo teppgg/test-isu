@@ -152,7 +152,7 @@ module Isuconp
             query = 'SELECT c.`comment`, c.`created_at`, u.`account_name`
                     FROM `comments` c JOIN `users` u ON c.`user_id`=u.`id`
                     WHERE c.`post_id` = ? 
-                    ORDER BY `created_at` DESC'
+                    ORDER BY c.`created_at` DESC'
             unless all_comments
               query += ' LIMIT 3'
             end
