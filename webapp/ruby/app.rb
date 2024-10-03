@@ -119,23 +119,47 @@ module Isuconp
 
         # resultsを要素数分ループ
         results.to_a.each do |post|
-          post[:comment_count] = db.xquery('SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?',
-            post[:id]
-          ).first[:count]
-
-          query = 'SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC'
-          unless all_comments
-            query += ' LIMIT 3'
+          # 投稿ごとのコメント数をmemcachedからget
+          cached_comments_count = memcached.get("comments.#{post[:id]}.count")
+          if cached_comments_count
+            # キャッシュがあるならそれを使う
+            post[:comment_count] = cached_comments_count.to_i
+          else
+            # キャッシュがないならMySQLにクエリする
+            post[:comment_count] = db.xquery('SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?',
+              post[:id]
+            ).first[:count]
+            # 次からcachedで使えるようにmemcachedにset
+            memcached.set("comments.#{post[:id]}.count", post[:comment_count], 10)
           end
+          
+          # 投稿ごとのコメントをmemcachedからget
+          cached_comments = memcached.get("comments.#{post[:id]}.#{all_comments.to_s}")
+
+          if cached_comments
+            # キャッシュがあるならそれを使う
+            post[:comment] = cached_comments
+          else
+            # キャッシュがないならMySQLにクエリ
+            # JOINして1クエリにまとめる
+            query = 'SELECT c.comment, c.created_at, u.account_name 
+                    FROM comments c JOIN users u ON c.user_id=u.id
+                    WHERE c.post_id = ? 
+                    ORDER BY `created_at` DESC'
+            unless all_comments
+              query += ' LIMIT 3'
+          end
+
           comments = db.xquery(query, 
             post[:id]
           ).to_a
           comments.each do |comment|
-            comment[:user] = db.xquery('SELECT * FROM `users` WHERE `id` = ?',
-              comment[:user_id]
-            ).first
+            comment[:user] = {account_name: comment[:account_name]}
           end
           post[:comments] = comments.reverse
+
+          # memcachedにset
+          memcached.set("comments.#{post[:id]}.#{all_comments.to_s}", post[:comments], 10)
 
           post[:user] = {
             account_name: post[:account_name],
