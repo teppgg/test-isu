@@ -271,7 +271,7 @@ module Isuconp
       me = get_session_user()
       results = db.query("
         SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-        FROM `posts` AS p FORCE INDEX (posts_user_index) JOIN `users` AS u ON (p.user_id=u.id)
+        FROM `posts` AS p STRAIGHT_JOIN `users` AS u ON (p.user_id=u.id)
         WHERE u.del_flg=0
         ORDER BY p.created_at DESC 
         LIMIT #{POSTS_PER_PAGE}
@@ -329,7 +329,7 @@ module Isuconp
       max_created_at = params['max_created_at']
       results = db.xquery("
         SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-        FROM posts AS p FORCE INDEX (posts_user_index) JOIN users AS u ON (p.user_id=u.id)
+        FROM posts AS p STRAIGHT_JOIN users AS u ON (p.user_id=u.id)
         WHERE p.created_at <= ? AND u.del_flg=0
         ORDER BY p.created_at DESC
         LIMIT #{POSTS_PER_PAGE}
@@ -344,7 +344,7 @@ module Isuconp
     get '/posts/:id' do
       results = db.xquery("
         SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-        FROM posts AS p FORCE INDEX (posts_user_index) JOIN users AS u ON (p.user_id=u.id)
+        FROM posts AS p STRAIGHT_JOIN users AS u ON (p.user_id=u.id)
         WHERE p.id = ? AND u.del_flg=0
       ",
         params[:id]
