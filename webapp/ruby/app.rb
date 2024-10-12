@@ -12,6 +12,7 @@ require 'shellwords'
 require 'rack/session/dalli'
 # ファイル操作系のlinuxコマンド使えるようにする
 require 'fileutils'
+require 'openssl'
 
 module Isuconp
   class App < Sinatra::Base
@@ -97,8 +98,10 @@ module Isuconp
       end
 
       def digest(src)
+        # ログイン時のハッシュ値の計算
         # opensslのバージョンによっては (stdin)= というのがつくので取る
-        `printf "%s" #{Shellwords.shellescape(src)} | openssl dgst -sha512 | sed 's/^.*= //'`.strip
+        #`printf "%s" #{Shellwords.shellescape(src)} | openssl dgst -sha512 | sed 's/^.*= //'`.strip
+        return OpenSSL::Digest::SHA512.hexdigest(src)
       end
 
       def calculate_salt(account_name)
