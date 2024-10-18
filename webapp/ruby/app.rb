@@ -1,5 +1,6 @@
 #(^^)ﾉｼ
 #kanra
+# 間違えてルートディレクトリでgit initしてしまったので、影響確認
 
 # after private
 # hello from win10
