@@ -124,57 +124,58 @@ module Isuconp
       end
       
       # ページに表示する投稿リストを作成する
-      def make_posts(results, all_comments: false)
-        # posts 結果を格納する配列
-        posts = []
 
-        # resultsを要素数分ループ
+      def make_posts(results, all_comments: false)
+        posts = []
+        # posts.idをあらかじめ取り出してキャッシュのキーを一覧にする
+        count_keys = results.to_a.map{|post| "comments.#{post[:id]}.count"}
+        comments_keys = results.to_a.map{|post| "comments.#{post[:id]}.#{all_comments.to_s}"}
+
+        # get_multiで複数のキーを一度に取得する
+        cached_counts = memcached.get_multi(count_keys)
+        cached_comments = memcached.get_multi(comments_keys)
+
         results.to_a.each do |post|
-          # 投稿ごとのコメント数をmemcachedからget
-          cached_comments_count = memcached.get("comments.#{post[:id]}.count")
-          if cached_comments_count
-            # キャッシュがあるならそれを使う
-            post[:comment_count] = cached_comments_count.to_i
+          if cached_counts["comments.#{post[:id]}.count"]
+            # 取得済みのキャッシュがあればそれを使う
+            post[:comment_count] = cached_counts["comments.#{post[:id]}.count"].to_i
           else
-            # キャッシュがないならMySQLにクエリする
+            # 存在しなかったらMySQLにクエリ
             post[:comment_count] = db.xquery('SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?',
               post[:id]
             ).first[:count]
-            # 次からcachedで使えるようにmemcachedにset
+            # memcachedにset(TTL 10s)
             memcached.set("comments.#{post[:id]}.count", post[:comment_count], 10)
           end
-          
-          # 投稿ごとのコメントをmemcachedからget
-          cached_comments = memcached.get("comments.#{post[:id]}.#{all_comments.to_s}")
 
-          if cached_comments
-            # キャッシュがあるならそれを使う
-            post[:comments] = cached_comments
+          if cached_comments["comments.#{post[:id]}.#{all_comments.to_s}"]
+            # 取得済みのキャッシュがあればそれを使う
+            post[:comments] = cached_comments["comments.#{post[:id]}.#{all_comments.to_s}"]
           else
-            # キャッシュがないならMySQLにクエリ
-            # JOINして1クエリにまとめる
+            # 存在しなかったらMySQLにクエリ JOINで1クエリで取得する
             query = 'SELECT c.`comment`, c.`created_at`, u.`account_name`
-                    FROM `comments` c JOIN `users` u ON c.`user_id`=u.`id`
-                    WHERE c.`post_id` = ? 
-                    ORDER BY c.`created_at` DESC'
+                    FROM `comments` c JOIN `users` u
+                    ON c.`user_id`=u.`id`
+                    WHERE c.`post_id` = ? ORDER BY c.`created_at` DESC'
             unless all_comments
               query += ' LIMIT 3'
             end
-
             comments = db.xquery(query, post[:id]).to_a
             comments.each do |comment|
-              comment[:user] = {account_name: comment[:account_name]}
+              comment[:user] = {
+                account_name: comment[:account_name]
+              }
+            end
+            post[:comments] = comments.reverse
+            # memcachedにset(TTL 10s)
+            memcached.set("comments.#{post[:id]}.#{all_comments.to_s}", post[:comments], 10)
           end
-          post[:comments] = comments.reverse
 
-          # memcachedにset
-          memcached.set("comments.#{post[:id]}.#{all_comments.to_s}", post[:comments], 10)
-        end
           post[:user] = {
             account_name: post[:account_name],
           }
+
           posts.push(post)
-          
         end
 
         posts
