@@ -1,17 +1,8 @@
-#(^^)ﾉｼ
-#kanra
-# 間違えてルートディレクトリでgit initしてしまったので、影響確認
-
-# after private
-# hello from win10
 require 'sinatra/base'
-# mysqlにクエリできるようにする
-# require 'mysql2'
 require 'mysql2-cs-bind'
 require 'rack-flash'
 require 'shellwords'
 require 'rack/session/dalli'
-# ファイル操作系のlinuxコマンド使えるようにする
 require 'fileutils'
 require 'openssl'
 
@@ -23,10 +14,8 @@ module Isuconp
 
     UPLOAD_LIMIT = 10 * 1024 * 1024 # 10mb
 
-    # webページに表示される投稿の数
     POSTS_PER_PAGE = 20
 
-    # IMAGE_DIR = 対象の画像ファイルがある/imageディレクトリ
     IMAGE_DIR = File.expand_path('../../public/image', __FILE__)
 
     helpers do
@@ -49,7 +38,6 @@ module Isuconp
         client
       end
 
-      # mysqlのtableはisuconpを選択する
       def db
         return Thread.current[:isuconp_db] if Thread.current[:isuconp_db]
         client = Mysql2::Client.new(
@@ -99,9 +87,6 @@ module Isuconp
       end
 
       def digest(src)
-        # ログイン時のハッシュ値の計算
-        # opensslのバージョンによっては (stdin)= というのがつくので取る
-        #`printf "%s" #{Shellwords.shellescape(src)} | openssl dgst -sha512 | sed 's/^.*= //'`.strip
         return OpenSSL::Digest::SHA512.hexdigest(src)
       end
 
@@ -122,8 +107,6 @@ module Isuconp
           nil
         end
       end
-      
-      # ページに表示する投稿リストを作成する
 
       def make_posts(results, all_comments: false)
         posts = []
@@ -271,18 +254,17 @@ module Isuconp
       session.delete(:user)
       redirect '/', 302
     end
-    # GET / の処理
+
     get '/' do
       me = get_session_user()
-      results = db.query("
+
+      results = db.query('
         SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
         FROM `posts` AS p STRAIGHT_JOIN `users` AS u ON (p.user_id=u.id)
         WHERE u.del_flg=0
-        ORDER BY p.created_at DESC 
-        LIMIT #{POSTS_PER_PAGE}
-      ")
-      
-      # make_posts関数に投げる
+        ORDER BY p.created_at DESC
+        LIMIT 20
+      ')
       posts = make_posts(results)
 
       erb :index, layout: :layout, locals: { posts: posts, me: me }
@@ -297,13 +279,12 @@ module Isuconp
         return 404
       end
 
-      results = db.xquery("
-      SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-      FROM `posts` AS p FORCE INDEX (posts_user_index) JOIN `users` AS u ON (p.user_id=u.id)
-      WHERE `user_id` = ?  AND u.del_flg=0
-      ORDER BY p.created_at DESC
-      LIMIT #{POSTS_PER_PAGE}
-      ",
+      results = db.xquery('
+        SELECT p.`id`, p.`user_id`, p.`body`, p.`mime`, p.`created_at`, u.`account_name`
+        FROM `posts` p FORCE INDEX(`posts_user_index`) JOIN`users` u ON (p.user_id=u.id)
+        WHERE `user_id` = ? AND u.del_flg=0
+        ORDER BY p.`created_at` DESC LIMIT 20
+      ',
         user[:id]
       )
       posts = make_posts(results)
@@ -332,13 +313,13 @@ module Isuconp
 
     get '/posts' do
       max_created_at = params['max_created_at']
-      results = db.xquery("
-        SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-        FROM posts AS p STRAIGHT_JOIN users AS u ON (p.user_id=u.id)
-        WHERE p.created_at <= ? AND u.del_flg=0
-        ORDER BY p.created_at DESC
-        LIMIT #{POSTS_PER_PAGE}
-      ",
+      results = db.xquery('
+        SELECT p.`id`, p.`user_id`, p.`body`, p.`mime`, p.`created_at`, u.`account_name`
+        FROM `posts` p STRAIGHT_JOIN `users` u ON (p.user_id=u.id)
+        WHERE p.`created_at` <= ? AND u.del_flg=0
+        ORDER BY p.`created_at` DESC
+        LIMIT 20
+      ',
         max_created_at.nil? ? nil : Time.iso8601(max_created_at).localtime
       )
       posts = make_posts(results)
@@ -347,11 +328,11 @@ module Isuconp
     end
 
     get '/posts/:id' do
-      results = db.xquery("
+      results = db.xquery('
         SELECT p.id, p.user_id, p.body, p.created_at, p.mime, u.account_name
-        FROM posts AS p STRAIGHT_JOIN users AS u ON (p.user_id=u.id)
-        WHERE p.id = ? AND u.del_flg=0
-      ",
+        FROM `posts` p STRAIGHT_JOIN `users` u ON p.user_id=u.id
+        WHERE p.`id` = ? AND u.del_flg=0
+      ',
         params[:id]
       )
       posts = make_posts(results, all_comments: true)
@@ -405,11 +386,8 @@ module Isuconp
         pid = db.last_id
 
         # # アップロードされたテンポラリファイルをmvして配信ディレクトリに移動
-        # imagefile = ~~~/public/image/DB上のID.jpg　みたいにする
         imgfile = IMAGE_DIR + "/#{pid}.#{ext}"
-        # mvコマンド
         FileUtils.mv(params['file'][:tempfile], imgfile)
-        # chmodeコマンド
         FileUtils.chmod(0644, imgfile)
 
         redirect "/posts/#{pid}", 302
@@ -432,13 +410,9 @@ module Isuconp
         headers['Content-Type'] = post[:mime]
 
         # 取得されたタイミングでファイルに書き出す
-        # imagefile = ~~~/public/image/DB上のID.jpg　みたいにする
         imgfile = IMAGE_DIR + "/#{post[:id]}.#{params[:ext]}"
-        # imagefileを名前としてファイルを作成、write権限で開く
         f = File.open(imgfile, "w")
-        # バイナリから書き出した画像を書き込む
         f.write(post[:imgdata])
-        # 保存
         f.close()
         return post[:imgdata]
       end
