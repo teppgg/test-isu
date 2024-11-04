@@ -110,11 +110,12 @@ module Isuconp
 
       def make_posts(results, all_comments: false)
         posts = []
-        # posts.idをあらかじめ取り出してキャッシュのキーを一覧にする
+        # 「postごとのコメント数」の"キーのリスト"を用意しとく
         count_keys = results.to_a.map{|post| "comments.#{post[:id]}.count"}
         comments_keys = results.to_a.map{|post| "comments.#{post[:id]}.#{all_comments.to_s}"}
 
-        # get_multiで複数のキーを一度に取得する
+        # 「postごとのコメント数」の"リスト"を作成する
+        #   ※用意してた"キーのリスト"を引数にすることで、一回のクエリで全部取得する
         cached_counts = memcached.get_multi(count_keys)
         cached_comments = memcached.get_multi(comments_keys)
 
